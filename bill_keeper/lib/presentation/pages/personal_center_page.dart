@@ -36,7 +36,7 @@ class PersonalCenterPage extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.phone),
             title: const Text('手机号'),
-            subtitle: Text(authState.valueOrNull == true ? '已登录' : '未登录'),
+            subtitle: Text(authState.valueOrNull == AuthState.authenticated ? '已登录' : '未登录'),
           ),
           ListTile(
             leading: const Icon(Icons.storage),

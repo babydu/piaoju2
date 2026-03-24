@@ -18,10 +18,10 @@ class _SplashPageState extends ConsumerState<SplashPage> {
   }
 
   Future<void> _checkAuth() async {
-    await ref.read(authStateProvider.future);
+    await Future.delayed(const Duration(milliseconds: 500));
     if (mounted) {
-      final isLoggedIn = ref.read(authStateProvider).valueOrNull;
-      if (isLoggedIn == true) {
+      final isLoggedIn = ref.read(authStateProvider);
+      if (isLoggedIn) {
         context.go('/home');
       } else {
         context.go('/login');

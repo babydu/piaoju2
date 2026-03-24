@@ -1,5 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:bill_keeper/data/services/auth_service.dart';
+
+final authServiceProvider = Provider<AuthService>((ref) {
+  return AuthService();
+});
+
+final authNotifierProvider = StateNotifierProvider<AuthNotifier, AsyncValue<AuthState>>((ref) {
+  final authService = ref.watch(authServiceProvider);
+  return AuthNotifier(authService);
+});
+
+final authStateProvider = Provider<bool>((ref) {
+  final authState = ref.watch(authNotifierProvider);
+  return authState.valueOrNull == AuthState.authenticated;
+});
 
 enum AuthState {
   initial,
@@ -8,51 +22,50 @@ enum AuthState {
   loading,
 }
 
-class AuthNotifier extends StateNotifier<AsyncValue<bool>> {
-  AuthNotifier() : super(const AsyncValue.data(false)) {
+class AuthNotifier extends StateNotifier<AsyncValue<AuthState>> {
+  final AuthService _authService;
+
+  AuthNotifier(this._authService) : super(const AsyncValue.data(AuthState.initial)) {
     _checkLoginStatus();
   }
-
-  static const _phoneKey = 'user_phone';
-  static const _loginTimeKey = 'login_time';
 
   Future<void> _checkLoginStatus() async {
     state = const AsyncValue.loading();
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final phone = prefs.getString(_phoneKey);
-      if (phone != null && phone.isNotEmpty) {
-        state = const AsyncValue.data(true);
-      } else {
-        state = const AsyncValue.data(false);
-      }
+      final isLoggedIn = await _authService.isLoggedIn();
+      state = AsyncValue.data(isLoggedIn ? AuthState.authenticated : AuthState.unauthenticated);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
 
-  Future<void> sendCode(String phone) async {
-    // Simulate sending SMS code
-    await Future.delayed(const Duration(seconds: 1));
-    // In production, this would call an SMS API
+  Future<AuthResultData> sendCode(String phone) async {
+    state = const AsyncValue.loading();
+    try {
+      final result = await _authService.requestSMSCode(phone);
+      if (result.result == AuthResult.success) {
+        state = const AsyncValue.data(AuthState.unauthenticated);
+      } else {
+        state = AsyncValue.error(Exception(result.message), StackTrace.current);
+      }
+      return result;
+    } catch (e) {
+      state = AsyncValue.error(e, StackTrace.current);
+      return AuthResultData(AuthResult.networkError, e.toString());
+    }
   }
 
   Future<bool> verifyCode(String phone, String code) async {
     state = const AsyncValue.loading();
     try {
-      // Simulate verification
-      await Future.delayed(const Duration(seconds: 1));
-      
-      // For demo, accept any 6-digit code
-      if (code.length == 6) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_phoneKey, phone);
-        await prefs.setInt(_loginTimeKey, DateTime.now().millisecondsSinceEpoch);
-        state = const AsyncValue.data(true);
+      final result = await _authService.verifyCode(phone, code);
+      if (result.result == AuthResult.success) {
+        state = const AsyncValue.data(AuthState.authenticated);
         return true;
+      } else {
+        state = const AsyncValue.data(AuthState.unauthenticated);
+        return false;
       }
-      state = const AsyncValue.data(false);
-      return false;
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       return false;
@@ -60,18 +73,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<bool>> {
   }
 
   Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_phoneKey);
-    await prefs.remove(_loginTimeKey);
-    state = const AsyncValue.data(false);
+    await _authService.logout();
+    state = const AsyncValue.data(AuthState.unauthenticated);
+  }
+
+  Future<String?> getCurrentPhone() async {
+    return _authService.getCurrentPhone();
   }
 }
-
-final authNotifierProvider = StateNotifierProvider<AuthNotifier, AsyncValue<bool>>((ref) {
-  return AuthNotifier();
-});
-
-final authStateProvider = StreamProvider<bool>((ref) async* {
-  final authNotifier = ref.watch(authNotifierProvider);
-  yield authNotifier.valueOrNull ?? false;
-});

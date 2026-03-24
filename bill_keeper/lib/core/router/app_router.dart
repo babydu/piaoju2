@@ -72,14 +72,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
-      final isLoggedIn = ref.read(authStateProvider).valueOrNull;
+      final authState = ref.read(authNotifierProvider);
+      final isLoggedIn = authState.valueOrNull == AuthState.authenticated;
       final isOnLoginPage = state.matchedLocation == '/login';
 
-      if (isLoggedIn == null && !isOnLoginPage) {
+      if (!isLoggedIn && !isOnLoginPage) {
         return '/login';
       }
 
-      if (isLoggedIn != null && isOnLoginPage) {
+      if (isLoggedIn && isOnLoginPage) {
         return '/home';
       }
 
