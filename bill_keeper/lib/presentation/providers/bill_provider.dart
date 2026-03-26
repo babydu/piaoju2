@@ -52,9 +52,14 @@ Future<Bill> _mapBillWithRelations(AppDatabase db, Bill bill) async {
   
   final tags = <Tag>[];
   for (final tagId in tagIds) {
-    final tag = await db.tagsDao.getTagById(tagId);
-    if (tag != null) {
-      tags.add(tag);
+    final driftTag = await db.tagsDao.getTagById(tagId);
+    if (driftTag != null) {
+      tags.add(Tag(
+        id: driftTag.id,
+        name: driftTag.name,
+        userPhone: driftTag.phone,
+        createdAt: driftTag.createdAt,
+      ));
     }
   }
 
@@ -226,6 +231,16 @@ class BillNotifier extends StateNotifier<AsyncValue<List<Bill>>> {
       await _db.recycleBinDao.addItem(id);
       await _loadBills();
       _ref.invalidate(billListProvider);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteBillImage(String billId, String imageId) async {
+    try {
+      await _db.billImagesDao.deleteImage(imageId);
+      _ref.invalidate(billDetailProvider(billId));
       return true;
     } catch (e) {
       return false;

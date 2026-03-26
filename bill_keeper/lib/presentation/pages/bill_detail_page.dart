@@ -322,9 +322,13 @@ class _BillDetailPageState extends ConsumerState<BillDetailPage> {
       return;
     }
     
-    final success = await ref.read(billNotifierProvider.notifier).deleteBill(bill.id);
+    final imageToDelete = bill.images[index];
+    final success = await ref.read(billNotifierProvider.notifier).deleteBillImage(bill.id, imageToDelete.id);
     if (success && mounted) {
       ref.invalidate(billDetailProvider(widget.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('图片已删除')),
+      );
     }
   }
 
