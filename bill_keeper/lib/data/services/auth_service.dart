@@ -7,6 +7,7 @@ enum AuthResult {
   invalidCode,
   codeExpired,
   tooManyAttempts,
+  tooManyWrongAttempts,
   networkError,
 }
 
@@ -25,6 +26,7 @@ class AuthService {
   static const String _smsAttemptsKey = 'sms_attempts';
   static const String _loginAttemptsKey = 'login_attempts';
   static const String _smsCodeDateKey = 'sms_code_date';
+  static const String _wrongCodeAttemptsKey = 'wrong_code_attempts';
 
   static const int _codeValidMinutes = 5;
   static const int _maxSmsPerDay = 10;
@@ -60,8 +62,8 @@ class AuthService {
     await prefs.setInt(_smsCodeTimeKey, DateTime.now().millisecondsSinceEpoch);
     await prefs.setString(_smsCodeDateKey, today);
     await prefs.setInt(_smsAttemptsKey, smsAttempts + 1);
-
-    print('[AuthService] SMS Code for $phone: $code');
+    await prefs.setString('sms_code_phone', phone);
+    await prefs.setInt(_wrongCodeAttemptsKey, 0);
 
     return AuthResultData(AuthResult.success);
   }
@@ -97,13 +99,25 @@ class AuthService {
     }
 
     if (savedCode != code) {
-      return AuthResultData(AuthResult.invalidCode, '验证码错误');
+      int wrongAttempts = prefs.getInt(_wrongCodeAttemptsKey) ?? 0;
+      wrongAttempts++;
+      await prefs.setInt(_wrongCodeAttemptsKey, wrongAttempts);
+      
+      if (wrongAttempts >= _maxWrongCodeAttempts) {
+        await prefs.remove(_smsCodeKey);
+        await prefs.remove(_smsCodeTimeKey);
+        await prefs.setInt(_wrongCodeAttemptsKey, 0);
+        return AuthResultData(AuthResult.tooManyWrongAttempts, '验证码错误次数过多，请重新获取');
+      }
+      
+      return AuthResultData(AuthResult.invalidCode, '验证码错误，剩余${_maxWrongCodeAttempts - wrongAttempts}次');
     }
 
     await prefs.setString(_phoneKey, phone);
     await prefs.setInt(_loginTimeKey, now.millisecondsSinceEpoch);
     await prefs.remove(_smsCodeKey);
     await prefs.remove(_smsCodeTimeKey);
+    await prefs.remove(_wrongCodeAttemptsKey);
 
     return AuthResultData(AuthResult.success);
   }

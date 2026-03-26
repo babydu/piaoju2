@@ -1,25 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:bill_keeper/data/providers/database_providers.dart';
+import 'package:bill_keeper/data/database/daos/recycle_bin_dao.dart';
 
-final recycleBinListProvider = FutureProvider<List<RecycleBinItem>>((ref) async {
-  await Future.delayed(const Duration(milliseconds: 300));
-  return [];
+final recycleBinListProvider = FutureProvider<List<RecycledBill>>((ref) async {
+  final db = ref.watch(appDatabaseProvider);
+  return db.recycleBinDao.getAllItems();
 });
-
-class RecycleBinItem {
-  final String id;
-  final String title;
-  final DateTime deletedAt;
-  final int remainingDays;
-
-  const RecycleBinItem({
-    required this.id,
-    required this.title,
-    required this.deletedAt,
-    required this.remainingDays,
-  });
-}
 
 class RecycleBinPage extends ConsumerWidget {
   const RecycleBinPage({super.key});
@@ -38,7 +26,7 @@ class RecycleBinPage extends ConsumerWidget {
       ),
       body: itemsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(child: Text('Error: $error')),
+        error: (error, stack) => Center(child: Text('加载失败: $error')),
         data: (items) {
           if (items.isEmpty) {
             return const Center(
@@ -60,21 +48,17 @@ class RecycleBinPage extends ConsumerWidget {
               final item = items[index];
               return ListTile(
                 leading: const Icon(Icons.receipt_long),
-                title: Text(item.title),
-                subtitle: Text('剩余 ${item.remainingDays} 天'),
+                title: Text(item.title.isEmpty ? '未命名票据' : item.title),
+                subtitle: Text('剩余 $item.remainingDays 天'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('已恢复')),
-                        );
-                      },
+                      onPressed: () => _restoreItem(context, ref, item),
                       child: const Text('恢复'),
                     ),
                     TextButton(
-                      onPressed: () => _showDeleteDialog(context),
+                      onPressed: () => _showDeleteDialog(context, ref, item),
                       child: const Text('彻底删除', style: TextStyle(color: Colors.red)),
                     ),
                   ],
@@ -87,7 +71,26 @@ class RecycleBinPage extends ConsumerWidget {
     );
   }
 
-  void _showDeleteDialog(BuildContext context) {
+  Future<void> _restoreItem(BuildContext context, WidgetRef ref, RecycledBill item) async {
+    try {
+      final db = ref.read(appDatabaseProvider);
+      await db.recycleBinDao.restoreItem(item.billId);
+      ref.invalidate(recycleBinListProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已恢复')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('恢复失败: $e')),
+        );
+      }
+    }
+  }
+
+  void _showDeleteDialog(BuildContext context, WidgetRef ref, RecycledBill item) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -99,11 +102,9 @@ class RecycleBinPage extends ConsumerWidget {
             child: const Text('取消'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('已彻底删除')),
-              );
+              await _permanentlyDelete(context, ref, item);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('删除'),
@@ -111,5 +112,24 @@ class RecycleBinPage extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _permanentlyDelete(BuildContext context, WidgetRef ref, RecycledBill item) async {
+    try {
+      final db = ref.read(appDatabaseProvider);
+      await db.recycleBinDao.permanentlyDelete(item.billId);
+      ref.invalidate(recycleBinListProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已彻底删除')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('删除失败: $e')),
+        );
+      }
+    }
   }
 }
