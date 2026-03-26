@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:bill_keeper/domain/models/bill.dart';
 import 'package:bill_keeper/presentation/providers/auth_provider.dart';
+import 'package:bill_keeper/presentation/providers/bill_provider.dart';
+import 'package:bill_keeper/data/providers/database_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SearchHistoryNotifier extends StateNotifier<List<String>> {
@@ -152,10 +154,58 @@ class SearchFilterNotifier extends StateNotifier<SearchFilter> {
 final searchResultsProvider = FutureProvider<List<Bill>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   final filter = ref.watch(searchFilterProvider);
+  final db = ref.watch(appDatabaseProvider);
   
   if (query.isEmpty && filter.tagId == null && filter.collectionId == null) {
     return [];
   }
 
-  return [];
+  final phone = await db.usersDao.getCurrentPhone();
+  if (phone == null) return [];
+
+  List<Bill> results = [];
+
+  if (query.isNotEmpty) {
+    results = await db.billsDao.searchBills(phone, query);
+  } else if (filter.collectionId != null) {
+    results = await db.billsDao.getBillsByCollection(phone, filter.collectionId!);
+  } else if (filter.tagId != null) {
+    results = await db.billsDao.getBillsByTag(phone, filter.tagId!);
+  } else {
+    results = await db.billsDao.getAllBills(phone);
+  }
+
+  if (filter.startDate != null) {
+    results = results.where((b) => b.createdAt.isAfter(filter.startDate!)).toList();
+  }
+  if (filter.endDate != null) {
+    results = results.where((b) => b.createdAt.isBefore(filter.endDate!.add(const Duration(days: 1)))).toList();
+  }
+
+  if (filter.sortBy == SearchSortBy.timeDesc) {
+    results.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  } else if (filter.sortBy == SearchSortBy.timeAsc) {
+    results.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
+
+  final billsWithRelations = <Bill>[];
+  for (final bill in results) {
+    final images = await db.billImagesDao.getImagesByBillId(bill.id);
+    final tagIds = await db.billTagsDao.getTagIdsForBill(bill.id);
+    
+    final tags = <dynamic>[];
+    for (final tagId in tagIds) {
+      final tag = await db.tagsDao.getTagById(tagId);
+      if (tag != null) {
+        tags.add(tag);
+      }
+    }
+
+    billsWithRelations.add(bill.copyWith(
+      images: images,
+      tags: tags.cast(),
+    ));
+  }
+
+  return billsWithRelations;
 });
