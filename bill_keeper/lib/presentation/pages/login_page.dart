@@ -223,6 +223,41 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   color: Colors.grey.shade600,
                 ),
               ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.green.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          '测试模式',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '万能验证码：888888\n（任何手机号 + 此验证码均可登录）',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
