@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:bill_keeper/presentation/providers/upload_provider.dart';
 import 'package:bill_keeper/presentation/providers/collection_provider.dart';
+import 'package:bill_keeper/presentation/providers/bill_provider.dart';
 
 class ImageEditPage extends ConsumerStatefulWidget {
   const ImageEditPage({super.key});
@@ -435,8 +436,50 @@ class _ImageEditPageState extends ConsumerState<ImageEditPage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('保存功能开发中')),
+    final storageService = ref.read(storageServiceProvider);
+    final imagePaths = <String>[];
+
+    for (final image in state.images) {
+      try {
+        final sourcePath = image.processedPath ?? image.originalPath;
+        final savedPath = await storageService.saveImage(
+          File(sourcePath),
+        );
+        imagePaths.add(savedPath);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('图片保存失败: $e')),
+          );
+        }
+        return;
+      }
+    }
+
+    final billId = await ref.read(billNotifierProvider.notifier).createBill(
+      title: state.title.isEmpty ? '未命名票据' : state.title,
+      ocrContent: state.ocrContent,
+      imagePaths: imagePaths,
+      tagNames: state.selectedTags,
+      collectionId: state.collectionId,
+      location: state.location,
+      remark: state.remark.isEmpty ? null : state.remark,
     );
+
+    if (billId != null) {
+      ref.read(uploadNotifierProvider.notifier).reset();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('票据保存成功')),
+        );
+        context.go('/bill/$billId');
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('保存失败，请重试')),
+        );
+      }
+    }
   }
 }

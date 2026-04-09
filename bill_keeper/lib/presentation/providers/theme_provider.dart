@@ -2,17 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-final themeModeProvider = StateProvider<ThemeMode>((ref) {
-  return ThemeMode.system;
+final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>((ref) {
+  return ThemeModeNotifier();
 });
 
-Future<void> loadThemeMode(WidgetRef ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final themeIndex = prefs.getInt('theme_mode') ?? 0;
-  ref.read(themeModeProvider.notifier).state = ThemeMode.values[themeIndex];
-}
+class ThemeModeNotifier extends StateNotifier<ThemeMode> {
+  static const String _key = 'theme_mode';
+  
+  ThemeModeNotifier() : super(ThemeMode.system) {
+    _loadTheme();
+  }
 
-Future<void> saveThemeMode(ThemeMode mode) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setInt('theme_mode', mode.index);
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final themeIndex = prefs.getInt(_key) ?? 0;
+    if (themeIndex < ThemeMode.values.length) {
+      state = ThemeMode.values[themeIndex];
+    }
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    state = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_key, mode.index);
+  }
 }
